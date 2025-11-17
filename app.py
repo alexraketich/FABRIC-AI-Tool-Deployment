@@ -91,7 +91,7 @@ tester = 'RENCI'
 # Global variable for # of docs to feed to LLM
 LLM_docs = 6
 # Global variable for # for docs to retrieve
-RETRIEVE_K = 20
+RETRIEVE_K = 30
 
 
 class State(TypedDict):
