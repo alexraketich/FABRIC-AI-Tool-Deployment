@@ -88,6 +88,12 @@ qa_model = "gpt-4o-mini"
 cg_model = "gpt-4o-mini"
 tester = 'RENCI'
 
+# Global variable for # of docs to feed to LLM
+LLM_docs = 6
+# Global variable for # for docs to retrieve
+RETRIEVE_K = 20
+
+
 class State(TypedDict):
     question: str
     context: List[Document]
@@ -135,7 +141,7 @@ def generate_response() -> str:
         model = qa_model
         db_loc = QA_DB_FILE
         template = QA_PROMPT
-        num_docs = 6
+        num_docs = LLM_docs
         temp = 0.2
 
     embedding_model = HuggingFaceEmbeddings(model_name='all-mpnet-base-v2')
@@ -154,6 +160,8 @@ def generate_response() -> str:
         default_window = 16384
         llm = OllamaLLM(model=model, num_ctx=default_window, temperature=temp)
     app.logger.info("Model successfully initialized")
+    app.logger.info(f"[SETTING] num_docs={num_docs}")
+    app.logger.info(f"[SETTING] retrieval_k={RETRIEVE_K}")
 
     # ----------------------------------------------------------------------------------------------------- #
     # -------------------------------------- Define Application Steps ------------------------------------- #
@@ -164,6 +172,9 @@ def generate_response() -> str:
         end = time.perf_counter()
         app.logger.info(f"[TIMING] Retrieval only = {end - start:.3f} sec")
         return {"context": retrieved_docs}
+
+        # for no rerank -> return {"context": retrieved_docs[:num_docs]}
+
 
 
     def rerank(state: State) -> dict:
@@ -205,11 +216,25 @@ def generate_response() -> str:
         return {"answer": response}
 
     graph_builder = StateGraph(State)
-    graph_builder.add_node("retrieve", lambda state: retrieve(state, k=30))
+    graph_builder.add_node("retrieve", lambda state: retrieve(state, k=RETRIEVE_K))
     graph_builder.add_node("rerank", rerank)
     graph_builder.add_edge(START, "retrieve")
     graph_builder.add_edge("retrieve", "rerank")
     graph = graph_builder.compile()
+    app.logger.info("[SETTING] reranking_disabled=False")
+
+#   for no rerank
+#    graph_builder = StateGraph(State)
+#   graph_builder.add_node("retrieve", lambda state: retrieve(state, k=RETRIEVE_K))
+#    graph = graph_builder.compile()
+#    app.logger.info("[SETTING] reranking_disabled=True")
+    
+   
+
+        
+
+
+
 
     # --- Measure retrieval + reranking combined ---
     t0 = time.perf_counter()
@@ -270,7 +295,6 @@ def print_context_list(contexts, tool_type):
             source = os.path.basename(document.metadata['source']).replace("py", "ipynb")
             key = 'url'
         else:
-
 
             source = document.metadata['title']
             key = 'source'
